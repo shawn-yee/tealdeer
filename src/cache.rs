@@ -191,6 +191,35 @@ impl Cache {
         }
     }
 
+    /// Check whether an old cache directory exists.
+    /// If it exists, but the new directory doesn't exist, rename it.
+    /// If both the old and the new directory exist, delete the old one.
+    pub fn migrate_cache_dir(old_cache_dir_name: &'static str, new_cache_dir_name: &'static str) {
+        if let Ok((cache_dir, _)) = Self::get_cache_dir() {
+            let old_cache_dir = cache_dir.join(old_cache_dir_name);
+            if old_cache_dir.exists() && old_cache_dir.is_dir() {
+                let new_cache_dir = cache_dir.join(new_cache_dir_name);
+                if !new_cache_dir.exists() {
+                    eprintln!("Migrating cache directory");
+                    fs::rename(&old_cache_dir, &new_cache_dir).unwrap_or_else(|e| {
+                        panic!(
+                            "Failed to migrate cache directory {:?} to {:?}: {}",
+                            old_cache_dir, new_cache_dir, e,
+                        );
+                    });
+                } else {
+                    eprintln!("Removing old cache directory");
+                    fs::remove_dir_all(&old_cache_dir).unwrap_or_else(|e| {
+                        panic!(
+                            "Failed to remove old cache directory {:?}: {}",
+                            old_cache_dir, e,
+                        );
+                    });
+                }
+            }
+        }
+    }
+
     /// Return the platform directory.
     fn get_platform_dir(&self) -> Option<&'static str> {
         match self.os {

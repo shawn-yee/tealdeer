@@ -102,7 +102,7 @@ enum CheckCacheResult {
     CacheMissing,
 }
 
-/// Check the cache for freshness. If it's stale or missing, show a warning.
+/// Check the cache for freshness. If it's stale, show a warning.
 fn check_cache(cache: &Cache, args: &Args, enable_styles: bool) -> CheckCacheResult {
     match cache.freshness() {
         CacheFreshness::Fresh => CheckCacheResult::CacheFound,
@@ -123,10 +123,7 @@ fn check_cache(cache: &Cache, args: &Args, enable_styles: bool) -> CheckCacheRes
             );
             CheckCacheResult::CacheFound
         }
-        CacheFreshness::Missing => {
-            eprintln!("Cache not found. Please run `tldr --update`.");
-            CheckCacheResult::CacheMissing
-        }
+        CacheFreshness::Missing => CheckCacheResult::CacheMissing,
     }
 }
 
@@ -404,6 +401,7 @@ fn main() {
 
     // Cache update, pass through
     let cache_updated = if should_update_cache(&args, &config, &cache) {
+        // TODO: Cache::migrate_cache_dir("tldr-master", "tldr-main");
         update_cache(&cache, args.flag_quiet);
         true
     } else {
@@ -413,7 +411,19 @@ fn main() {
     // Check cache presence and freshness
     if !cache_updated && (args.flag_list || args.arg_command.is_some()) {
         if check_cache(&cache, &args, enable_styles) == CheckCacheResult::CacheMissing {
-            process::exit(1);
+            // The cache is missing. This might be due to a renaming of the
+            // cache directory. Check whether the old cache directory exists
+            // (but not the new one), and if yes, rename it. (Note: Renaming a
+            // directory will not change its mtime!)
+            if let Ok((cache_dir, _)) = Cache::get_cache_dir() {
+                // TODO: Cache::migrate_cache_dir("tldr-master", "tldr-main");
+            }
+
+            // Check again, fail if it's still missing
+            if check_cache(&cache, &args, enable_styles) == CheckCacheResult::CacheMissing {
+                eprintln!("Cache not found. Please run `tldr --update`.");
+                process::exit(1);
+            }
         }
     }
 
