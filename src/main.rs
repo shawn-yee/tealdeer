@@ -78,6 +78,10 @@ struct Args {
     render: Option<String>,
 
     /// Override the operating system [linux, osx, sunos, windows]
+    #[clap(short = 'p', long = "platform", requires = "command")]
+    platform: Option<OsType>,
+
+    /// Deprecated alias of `platform`
     #[clap(short = 'o', long = "os", requires = "command")]
     os: Option<OsType>,
 
@@ -94,7 +98,7 @@ struct Args {
     clear_cache: bool,
 
     /// Use a pager to page output
-    #[clap(short = 'p', long = "pager", requires = "command")]
+    #[clap(long = "pager", requires = "command")]
     pager: bool,
 
     /// Display the raw markdown instead of rendering it
@@ -344,6 +348,10 @@ fn main() {
             args.raw = true;
             eprintln!("Warning: The -m / --markdown flag is deprecated, use -r / --raw instead");
         }
+        if args.os.is_some() && args.platform.is_none() {
+            args.platform = args.os;
+            eprintln!("Warning: The -o / --os flag is deprecated, use -p / --platform instead");
+        }
 
         args
     };
@@ -400,8 +408,8 @@ fn main() {
     }
 
     // Specify target OS
-    let os: OsType = match args.os {
-        Some(os) => os,
+    let platform: OsType = match args.platform {
+        Some(platform) => platform,
         None => OsType::current(),
     };
 
@@ -417,7 +425,7 @@ fn main() {
     }
 
     // Initialize cache
-    let cache = Cache::new(ARCHIVE_URL, os);
+    let cache = Cache::new(ARCHIVE_URL, platform);
 
     // Clear cache, pass through
     if args.clear_cache {
