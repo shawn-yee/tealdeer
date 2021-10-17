@@ -39,7 +39,7 @@ use crate::{
     error::TealdeerError::ConfigError,
     extensions::Dedup,
     output::print_page,
-    types::{ColorOptions, OsType},
+    types::{ColorOptions, PlatformType},
 };
 
 const NAME: &str = "tealdeer";
@@ -79,11 +79,11 @@ struct Args {
 
     /// Override the operating system [linux, osx, sunos, windows]
     #[clap(short = 'p', long = "platform", requires = "command")]
-    platform: Option<OsType>,
+    platform: Option<PlatformType>,
 
     /// Deprecated alias of `platform`
     #[clap(short = 'o', long = "os", requires = "command")]
-    os: Option<OsType>,
+    os: Option<PlatformType>,
 
     /// Override the language
     #[clap(short = 'L', long = "language")]
@@ -408,9 +408,9 @@ fn main() {
     }
 
     // Specify target OS
-    let platform: OsType = match args.platform {
+    let platform: PlatformType = match args.platform {
         Some(platform) => platform,
-        None => OsType::current(),
+        None => PlatformType::current(),
     };
 
     // If a local file was passed in, render it and exit

@@ -16,7 +16,7 @@ use zip::ZipArchive;
 
 use crate::{
     error::TealdeerError::{self, CacheError, UpdateError},
-    types::{OsType, PathSource},
+    types::{PathSource, PlatformType},
 };
 
 static CACHE_DIR_ENV_VAR: &str = "TEALDEER_CACHE_DIR";
@@ -27,7 +27,7 @@ static TLDR_OLD_PAGES_DIR: &str = "tldr-master";
 #[derive(Debug)]
 pub struct Cache {
     url: String,
-    os: OsType,
+    platform: PlatformType,
 }
 
 #[derive(Debug)]
@@ -64,13 +64,13 @@ pub enum CacheFreshness {
 }
 
 impl Cache {
-    pub fn new<S>(url: S, os: OsType) -> Self
+    pub fn new<S>(url: S, platform: PlatformType) -> Self
     where
         S: Into<String>,
     {
         Self {
             url: url.into(),
-            os,
+            platform,
         }
     }
 
@@ -196,11 +196,11 @@ impl Cache {
 
     /// Return the platform directory.
     fn get_platform_dir(&self) -> Option<&'static str> {
-        match self.os {
-            OsType::Linux => Some("linux"),
-            OsType::OsX => Some("osx"),
-            OsType::SunOs => Some("sunos"),
-            OsType::Windows => Some("windows"),
+        match self.platform {
+            PlatformType::Linux => Some("linux"),
+            PlatformType::OsX => Some("osx"),
+            PlatformType::SunOs => Some("sunos"),
+            PlatformType::Windows => Some("windows"),
         }
     }
 
