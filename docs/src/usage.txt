@@ -13,7 +13,7 @@ ARGS:
 OPTIONS:
     -l, --list                   List all commands in the cache
     -f, --render <FILE>          Render a specific markdown file
-    -o, --os <OS>                Override the operating system [linux, osx, sunos, windows]
+    -o, --os <OS>                Override the operating system [linux, macos, sunos, windows]
     -L, --language <LANGUAGE>    Override the language
     -u, --update                 Update the local cache
     -c, --clear-cache            Clear the local cache

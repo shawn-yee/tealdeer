@@ -77,7 +77,7 @@ struct Args {
     )]
     render: Option<String>,
 
-    /// Override the operating system [linux, osx, sunos, windows]
+    /// Override the operating system [linux, macos, sunos, windows]
     #[clap(short = 'o', long = "os", requires = "command")]
     os: Option<OsType>,
 
