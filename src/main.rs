@@ -18,7 +18,6 @@
 
 use std::{env, path::PathBuf, process};
 
-use ansi_term::{Color, Style};
 use app_dirs::AppInfo;
 use atty::Stream;
 use clap::{AppSettings, Parser};
@@ -33,6 +32,7 @@ mod formatter;
 mod line_iterator;
 mod output;
 mod types;
+mod utils;
 
 use crate::{
     cache::{Cache, CacheFreshness, PageLookupResult, TLDR_PAGES_DIR},
@@ -41,6 +41,7 @@ use crate::{
     extensions::Dedup,
     output::print_page,
     types::{ColorOptions, OsType},
+    utils::{print_error, print_warning},
 };
 
 const NAME: &str = "tealdeer";
@@ -49,8 +50,6 @@ const APP_INFO: AppInfo = AppInfo {
     author: NAME,
 };
 const ARCHIVE_URL: &str = "https://tldr.sh/assets/tldr.zip";
-#[cfg(not(target_os = "windows"))]
-const PAGER_COMMAND: &str = "less -R";
 
 // Note: flag names are specified explicitly in clap attributes
 // to improve readability and allow contributors to grep names like "clear-cache"
@@ -146,13 +145,13 @@ struct Args {
 
 /// Set up display pager
 #[cfg(not(target_os = "windows"))]
-fn configure_pager() {
-    Pager::with_default_pager(PAGER_COMMAND).setup();
+fn configure_pager(_: bool) {
+    Pager::with_default_pager("less -R").setup();
 }
 
 #[cfg(target_os = "windows")]
-fn configure_pager() {
-    eprintln!("Warning: -p / --pager flag not available on Windows!");
+fn configure_pager(enable_styles: bool) {
+    print_warning(enable_styles, "-p / --pager flag not available on Windows!");
 }
 
 /// The cache should get updated if this was requested by the user, or if auto
@@ -175,32 +174,33 @@ fn check_cache(args: &Args, enable_styles: bool) -> CheckCacheResult {
         CacheFreshness::Fresh => CheckCacheResult::CacheFound,
         CacheFreshness::Stale(_) if args.quiet => CheckCacheResult::CacheFound,
         CacheFreshness::Stale(age) => {
-            let warning_style = if enable_styles {
-                Style::new().fg(Color::Yellow)
-            } else {
-                Style::default()
-            };
-            eprintln!(
-                "{}",
-                warning_style.paint(format!(
+            print_warning(
+                enable_styles,
+                &format!(
                     "The cache hasn't been updated for {} days.\n\
                      You should probably run `tldr --update` soon.",
                     age.as_secs() / 24 / 3600
-                ))
+                ),
             );
             CheckCacheResult::CacheFound
         }
         CacheFreshness::Missing => {
-            eprintln!("Cache not found. Please run `tldr --update`.");
+            print_warning(
+                enable_styles,
+                "Cache not found. Please run `tldr --update`.",
+            );
             CheckCacheResult::CacheMissing
         }
     }
 }
 
 /// Clear the cache
-fn clear_cache(quietly: bool) {
+fn clear_cache(quietly: bool, enable_styles: bool) {
     Cache::clear().unwrap_or_else(|e| {
-        eprintln!("Could not delete cache: {}", e.message());
+        print_error(
+            enable_styles,
+            &format!("Could not delete cache: {}", e.message()),
+        );
         process::exit(1);
     });
     if !quietly {
@@ -209,9 +209,12 @@ fn clear_cache(quietly: bool) {
 }
 
 /// Update the cache
-fn update_cache(cache: &Cache, quietly: bool) {
+fn update_cache(cache: &Cache, quietly: bool, enable_styles: bool) {
     cache.update().unwrap_or_else(|e| {
-        eprintln!("Could not update cache: {}", e.message());
+        print_error(
+            enable_styles,
+            &format!("Could not update cache: {}", e.message()),
+        );
         process::exit(1);
     });
     if !quietly {
@@ -348,38 +351,13 @@ fn main() {
     init_log();
 
     // Parse arguments
-    let args = {
-        let mut args = Args::parse();
-
-        // Handle renamed arguments
-        if args.markdown {
-            args.raw = true;
-            eprintln!("Warning: The -m / --markdown flag is deprecated, use -r / --raw instead");
-        }
-
-        args
-    };
-
-    // Show config file and path, pass through
-    if args.config_path {
-        eprintln!("Warning: The --config-path flag is deprecated, use --show-paths instead");
-        show_config_path();
-    }
-    if args.show_paths {
-        show_paths();
-    }
-
-    // Create a basic config and exit
-    if args.seed_config {
-        create_config_and_exit();
-    }
+    let mut args = Args::parse();
 
     // Determine the usage of styles
     #[cfg(target_os = "windows")]
     let ansi_support = ansi_term::enable_ansi_support().is_ok();
     #[cfg(not(target_os = "windows"))]
     let ansi_support = true;
-
     let enable_styles = match args.color.unwrap_or_default() {
         // Attempt to use styling if instructed
         ColorOptions::Always => true,
@@ -394,21 +372,47 @@ fn main() {
         ColorOptions::Never => false,
     };
 
+    // Handle renamed arguments
+    if args.markdown {
+        args.raw = true;
+        print_warning(
+            enable_styles,
+            "The -m / --markdown flag is deprecated, use -r / --raw instead",
+        );
+    }
+
+    // Show config file and path, pass through
+    if args.config_path {
+        print_warning(
+            enable_styles,
+            "The --config-path flag is deprecated, use --show-paths instead",
+        );
+        show_config_path();
+    }
+    if args.show_paths {
+        show_paths();
+    }
+
+    // Create a basic config and exit
+    if args.seed_config {
+        create_config_and_exit();
+    }
+
     // Look up config file, if none is found fall back to default config.
     let config = match Config::load(enable_styles) {
         Ok(config) => config,
         Err(ConfigError(msg)) => {
-            eprintln!("Could not load config: {}", msg);
+            print_error(enable_styles, &format!("Could not load config: {}", msg));
             process::exit(1);
         }
         Err(e) => {
-            eprintln!("Could not load config: {}", e);
+            print_error(enable_styles, &format!("Could not load config: {}", e));
             process::exit(1);
         }
     };
 
     if args.pager || config.display.use_pager {
-        configure_pager();
+        configure_pager(enable_styles);
     }
 
     // Specify target OS
@@ -421,7 +425,7 @@ fn main() {
     if let Some(file) = args.render {
         let path = PageLookupResult::with_page(file);
         if let Err(msg) = print_page(&path, args.raw, &config) {
-            eprintln!("{}", msg);
+            print_error(enable_styles, &msg);
             process::exit(1);
         } else {
             process::exit(0);
@@ -433,12 +437,12 @@ fn main() {
 
     // Clear cache, pass through
     if args.clear_cache {
-        clear_cache(args.quiet);
+        clear_cache(args.quiet, enable_styles);
     }
 
     // Cache update, pass through
     let cache_updated = if should_update_cache(&args, &config) {
-        update_cache(&cache, args.quiet);
+        update_cache(&cache, args.quiet, enable_styles);
         true
     } else {
         false
@@ -456,7 +460,10 @@ fn main() {
     if args.list {
         // Get list of pages
         let pages = cache.list_pages().unwrap_or_else(|e| {
-            eprintln!("Could not get list of pages: {}", e.message());
+            print_error(
+                enable_styles,
+                &format!("Could not get list of pages: {}", e.message()),
+            );
             process::exit(1);
         });
 
@@ -480,15 +487,21 @@ fn main() {
             config.directories.custom_pages_dir.as_deref(),
         ) {
             if let Err(msg) = print_page(&page, args.raw, &config) {
-                eprintln!("{}", msg);
+                print_error(enable_styles, &msg);
                 process::exit(1);
             }
             process::exit(0);
         } else {
             if !args.quiet {
-                eprintln!("Page {} not found in cache", &command);
-                eprintln!("Try updating with `tldr --update`, or submit a pull request to:");
-                eprintln!("https://github.com/tldr-pages/tldr");
+                print_warning(
+                    enable_styles,
+                    &format!(
+                        "Page `{}` not found in cache.\n\
+                         Try updating with `tldr --update`, or submit a pull request to:\n\
+                         https://github.com/tldr-pages/tldr",
+                        &command
+                    ),
+                );
             }
             process::exit(1);
         }
